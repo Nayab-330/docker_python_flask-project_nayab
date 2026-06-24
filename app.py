@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def hello():
-    return "updated Flask sample application on azure hghapp service updated version-5"
+    return "updated Flask sample application on azure hghapp service updated version-6"
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
