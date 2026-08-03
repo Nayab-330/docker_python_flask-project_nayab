@@ -34,6 +34,9 @@ kill 9 <process id>
 pkill -f app.py    # to kill process 
 
 
+you can verfiy after that by running 'ss -tuln' weather port is active or not fro paticular process 
+
+
 ### How It Works
 nohup prevents the process from stopping when you log out.
 & runs it in the background.
