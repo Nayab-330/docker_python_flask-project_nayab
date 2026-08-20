@@ -173,7 +173,7 @@ jobs:
 
         with:
           host: 100.27.49.13
-          username: ec2-user
+          username: root
           key: ${{ secrets.EC2_SSH_KEY }}
 
           script: |
