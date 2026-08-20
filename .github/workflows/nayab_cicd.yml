@@ -1,4 +1,30 @@
-name: Docker CI
+#only pipeline to create and run application in github runner itself
+# name: Docker CI
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   docker-build:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Build Docker image
+#         run: docker build -t flask-app .
+
+#       - name: Run Docker container
+#         run: docker run -d -p 5001:5000 --name flask-container flask-app
+
+#       - name: Check container
+#         run: docker ps
+#=========
+
+name: Docker CI/CD to ECR
 
 on:
   push:
@@ -6,18 +32,50 @@ on:
       - main
 
 jobs:
-  docker-build:
+  docker-build-push:
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Checkout source code
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2. Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # 3. Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4. Build Docker image
       - name: Build Docker image
-        run: docker build -t flask-app .
+        run: |
+          docker build -t flask-app .
 
-      - name: Run Docker container
-        run: docker run -d -p 5001:5000 --name flask-container flask-app
+      # 5. Tag Docker image
+      - name: Tag Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: img6
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker tag flask-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag flask-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: Check container
-        run: docker ps
+      # 6. Push Docker image to ECR
+      - name: Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: img6
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
