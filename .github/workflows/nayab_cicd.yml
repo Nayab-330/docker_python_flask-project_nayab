@@ -24,7 +24,66 @@
 #         run: docker ps
 #=========
 
-name: Docker CI/CD to ECR
+# name: Docker CI/CD to ECR
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   docker-build-push:
+#     runs-on: ubuntu-latest
+
+#     steps:
+
+#       # 1. Checkout source code
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       # 2. Configure AWS credentials
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: us-east-1
+
+#       # 3. Login to Amazon ECR
+#       - name: Login to Amazon ECR
+#         id: login-ecr
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       # 4. Build Docker image
+#       - name: Build Docker image
+#         run: |
+#           docker build -t flask-app .
+
+#       # 5. Tag Docker image
+#       - name: Tag Docker image
+#         env:
+#           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           ECR_REPOSITORY: img6
+#           IMAGE_TAG: ${{ github.sha }}
+#         run: |
+#           docker tag flask-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+#           docker tag flask-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+#       # 6. Push Docker image to ECR
+#       - name: Push Docker image to ECR
+#         env:
+#           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+#           ECR_REPOSITORY: img6
+#           IMAGE_TAG: ${{ github.sha }}
+#         run: |
+#           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+#           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+#==========================
+
+# Run in our aws ec2 env:
+
+name: Docker CI/CD
 
 on:
   push:
@@ -32,16 +91,22 @@ on:
       - main
 
 jobs:
-  docker-build-push:
+  build-push-deploy:
+
     runs-on: ubuntu-latest
 
     steps:
 
+      # ==========================================
       # 1. Checkout source code
+      # ==========================================
       - name: Checkout code
         uses: actions/checkout@v4
 
+
+      # ==========================================
       # 2. Configure AWS credentials
+      # ==========================================
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -49,33 +114,126 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+
+      # ==========================================
       # 3. Login to Amazon ECR
+      # ==========================================
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+
+      # ==========================================
       # 4. Build Docker image
+      # ==========================================
       - name: Build Docker image
         run: |
           docker build -t flask-app .
 
+
+      # ==========================================
       # 5. Tag Docker image
+      # ==========================================
       - name: Tag Docker image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: img6
           IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker tag flask-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker tag flask-app:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+        run: |
+          docker tag flask-app:latest \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          docker tag flask-app:latest \
+            $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+
+      # ==========================================
       # 6. Push Docker image to ECR
+      # ==========================================
       - name: Push Docker image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: img6
           IMAGE_TAG: ${{ github.sha }}
+
         run: |
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          docker push \
+            $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+
+      # ==========================================
+      # 7. Deploy to EC2
+      # ==========================================
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.5
+
+        with:
+          host: 100.27.49.13
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+
+            echo "========================================"
+            echo "Logging into Amazon ECR"
+            echo "========================================"
+
+            aws ecr get-login-password \
+              --region us-east-1 | \
+            docker login \
+              --username AWS \
+              --password-stdin \
+              ${{ steps.login-ecr.outputs.registry }}
+
+
+            echo "========================================"
+            echo "Pulling latest Docker image"
+            echo "========================================"
+
+            docker pull \
+              ${{ steps.login-ecr.outputs.registry }}/img6:latest
+
+
+            echo "========================================"
+            echo "Stopping old container"
+            echo "========================================"
+
+            docker stop flask-container || true
+
+
+            echo "========================================"
+            echo "Removing old container"
+            echo "========================================"
+
+            docker rm flask-container || true
+
+
+            echo "========================================"
+            echo "Starting new container"
+            echo "========================================"
+
+            docker run -d \
+              --name flask-container \
+              -p 5001:5000 \
+              ${{ steps.login-ecr.outputs.registry }}/img6:latest
+
+
+            echo "========================================"
+            echo "Running containers"
+            echo "========================================"
+
+            docker ps
+
+
+            echo "========================================"
+            echo "Application logs"
+            echo "========================================"
+
+            docker logs --tail 50 flask-container
+
+      #===================
 
