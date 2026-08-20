@@ -1,1 +1,23 @@
+name: Docker CI
 
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t flask-app .
+
+      - name: Run Docker container
+        run: docker run -d -p 5001:5000 --name flask-container flask-app
+
+      - name: Check container
+        run: docker ps
