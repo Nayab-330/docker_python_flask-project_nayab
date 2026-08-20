@@ -170,6 +170,7 @@ jobs:
       # ==========================================
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.5
+        
 
         with:
           host: 100.27.49.13
